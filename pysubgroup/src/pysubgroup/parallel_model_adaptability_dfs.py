@@ -7,8 +7,8 @@ enumerates every conjunction up to ``task.depth`` with the same operator as
 
 :class:`ProcessModelAdaptabilityDFS` is the search used in the experiments
 (Linux ``fork``, copy-on-write). :class:`ParallelModelAdaptabilityDFS` evaluates
-in threads; that helps when the local work releases the GIL (LightGBM, TabPFN
-API waits) and is slower than sequential DFS for logistic regression, random
+in threads; that helps when the local work releases the GIL (LightGBM, local
+TabPFN) and is slower than sequential DFS for logistic regression, random
 forests and the MLP.
 
 There is no tight anti-monotone bound on Q_roh, so optimistic-estimate pruning
