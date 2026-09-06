@@ -102,7 +102,7 @@ def calculate_sweep(frame: pd.DataFrame) -> pd.DataFrame:
 
 def plot_sweep(table: pd.DataFrame, output_path: Path) -> None:
     fig, ax = plt.subplots(figsize=(7.2, 4.4))
-    ax.axhline(0.0, color="#888888", lw=1.0, ls="--", zorder=1)
+    ax.axhline(0.0, color="#888888", lw=1.0, zorder=1)
     for model in MODELS:
         cell = table[table["model"] == model].sort_values("alpha")
         ax.plot(
@@ -115,6 +115,16 @@ def plot_sweep(table: pd.DataFrame, output_path: Path) -> None:
             label=MODEL_LABELS[model],
             zorder=2,
         )
+    mean = table.groupby("alpha", sort=True)["spearman"].mean()
+    ax.plot(
+        mean.index,
+        mean.to_numpy(),
+        ls="--",
+        color="#222222",
+        lw=1.8,
+        label="Mittelwert",
+        zorder=3,
+    )
     ax.set_xlabel(r"$\alpha$")
     ax.set_ylabel(
         r"Spearman-Rangkorrelation $\rho$ "
