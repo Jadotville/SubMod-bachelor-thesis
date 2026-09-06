@@ -23,13 +23,12 @@ ROOT = Path(__file__).resolve().parents[3]
 SOURCE = ROOT / "experiments" / "comparison_subroc" / "results" / "phi_on_adapt" / "summary.csv"
 OUT_DIR = Path(__file__).resolve().parent
 VALUE_COLUMN = "spearman_quality_phi_gew"
-MODEL_ORDER = ("lr", "rf", "lgbm", "mlp", "tabpfn")
+MODEL_ORDER = ("lr", "rf", "lgbm", "mlp")
 MODEL_LABELS = {
     "lr": "logistische Regression",
     "rf": "Random Forest",
     "lgbm": "LightGBM",
     "mlp": "MLP",
-    "tabpfn": "TabPFN",
 }
 DATASET_LABELS = {
     "ACSIncome": "ACS Income",
