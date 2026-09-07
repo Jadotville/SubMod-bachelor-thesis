@@ -1,6 +1,6 @@
 # Subgruppensuche durch lokales Modelltraining
 
-Dieses Repo enthält die **modifizierte `pysubgroup`-Bibliothek** aus der Arbeit und die Skripte, mit denen die fünf Experimente nachvollzogen werden können.
+Dieses Repo enthält die **modifizierte `pysubgroup`-Bibliothek** aus der Arbeit, die Skripte der fünf Experimente und unter `thesis/` die Plots für die LaTeX-Arbeit.
 
 ## Warum eine lokale `pysubgroup`?
 
@@ -79,8 +79,8 @@ Die Notebook-Zellen sind unabhängig von den fünf Experimentordnern.
 | # | Ordner | Was es tut | Braucht |
 |---|--------|------------|---------|
 | 1 | `experiments/synthetical_data/` | Generatoren A0–G1 | nur Setup |
-| 2 | `experiments/experiments_real_world_data/` | 13 Datensätze, Offline-Suche (+ optional TabPFN) | Download |
-| 3 | `experiments/characterization of the quality function/` | α-/β-Sweeps, Größe, Redundanz | 2, Offline |
+| 2 | `experiments/experiments_real_world_data/` | 13 Datensätze: lr/rf/lgbm/mlp (`results/offline/`) und TabPFN lokal (`tabpfn_uncapped` + `tabpfn_30k`) | Download |
+| 3 | `experiments/characterization of the quality function/` | α-/β-Sweeps, Größe, Redundanz | 2 (`offline/`) |
 | 4 | `experiments/comparison_subroc/` | φ nachträglich auf denselben Kandidaten | 2 |
 | 5 | `experiments/performance improvement/` | Worker-Sweep (Threads/Prozesse vs. DFS) | 2, CSV |
 
@@ -88,8 +88,12 @@ Die Notebook-Zellen sind unabhängig von den fünf Experimentordnern.
 
 ```bash
 python experiments/synthetical_data/run.py --list
-python experiments/synthetical_data/run.py --all
+python experiments/synthetical_data/run.py --group thesis   # Kern der Arbeit (A–E)
+python experiments/synthetical_data/run.py --all            # alle Code-IDs
 ```
+
+Zuordnung Arbeit ↔ Code-IDs: `experiments/synthetical_data/THESIS_EXPERIMENTS.md`.
+
 ### 2. Reale Datensätze
 
 Die dreizehn CSVs gehören nicht zum Repo. Einmal herunterladen
@@ -100,17 +104,33 @@ cd experiments/experiments_real_world_data
 python download_data.py
 ```
 
-**Offline-Suche** (lr / rf / lgbm / mlp, Tiefe 2, volle Hälften,
+**Vier Modelle ohne TabPFN** (lr / rf / lgbm / mlp, Tiefe 2, volle 50/50-Hälften,
 `results/offline/`):
 
 ```bash
 bash run_batch.sh
 ```
 
-**TabPFN** (eine CUDA-GPU, nicht die Prior-Labs-API).
+**TabPFN** (lokal auf einer CUDA-GPU, nicht die Prior-Labs-API; spawn-Worker,
+α = 0,7, β = 0 wie in Kapitel 4).
+
+Zehn Datensätze mit vollen Hälften (`results/tabpfn_uncapped/`):
 
 ```bash
-cd experiments/experiments_real_world_data
+bash run_tabpfn_uncapped.sh
+```
+
+Covertype, Diabetes 130-US und UK Road Safety stratifiziert auf 30 000 Zeilen
+(`results/tabpfn_30k/`):
+
+```bash
+bash run_tabpfn_30k.sh
+```
+
+Optionaler Schnelllauf mit Train/Test-Cap 1024 und sequenzieller Suche
+(`results/tabpfn/`):
+
+```bash
 bash run_tabpfn.sh
 ```
 
@@ -128,7 +148,7 @@ python experiments/comparison_subroc/score_phi.py
 
 ### 5. Laufzeit / Worker-Sweep
 
-**Offline** (lr / rf / lgbm / mlp; Worker 1 … 64):
+**lr / rf / lgbm / mlp** (Worker 1 … 64; `results/offline/`):
 
 ```bash
 cd experiments/performance\ improvement
@@ -136,7 +156,7 @@ bash run_worker_sweep.sh
 ```
 
 **TabPFN** (lokal CUDA, Train/Test-Cap 1024, ein Estimator, Worker
-1 2 4 8 16 — dasselbe Protokoll wie `run_tabpfn.sh`):
+1 2 4 8 16 — Protokoll von `run_tabpfn.sh`):
 
 ```bash
 cd experiments/performance\ improvement
@@ -148,4 +168,15 @@ Figuren aus den Summary-CSVs:
 ```bash
 python experiments/performance\ improvement/plot_process_speedup.py
 ```
+
+### Arbeit: Tabellen und Abbildungen
+
+Anhangstabellen (Kandidatenbewertung je Modell):
+
+```bash
+.venv/bin/python thesis/tabellen/aktuelle_tabellen/generate_subgroup_overview_tables.py
+```
+
+Plot-Skripte liegen unter `thesis/plots/` (je Ordner `generate_plot.py` und README).
+Sie lesen die aggregierten Ergebnisse aus `results/offline/` bzw. den TabPFN-Läufen.
 

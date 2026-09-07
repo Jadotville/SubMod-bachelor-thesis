@@ -3,8 +3,9 @@ SubROC-φ on the candidates of the own Local-Retraining-Gain search.
 
 This is the comparison in the thesis (chapters 4 and 5): φ is computed from
 quantities the adaptability run already stores. It is not a second SubROC
-search. Offline cells come from ``results/offline/``; TabPFN cells from
-``results/tabpfn/`` (train/test cap 1024). Missing directories are skipped.
+search. Results for lr/rf/lgbm/mlp come from ``results/offline/``; TabPFN from
+``results/tabpfn_uncapped/`` and ``results/tabpfn_30k/``. Missing directories
+are skipped.
 
     φ(S) = AUC_{D_test}(f_train) − AUC_{S_test}(f_train)
 
@@ -14,7 +15,8 @@ holds the second as ``global_test_score``. Weighted φ uses |S_test|^α with
 
     python score_phi.py
     python score_phi.py --adapt-results-dir ../experiments_real_world_data/results/offline
-    python score_phi.py --adapt-results-dir ../experiments_real_world_data/results/tabpfn
+    python score_phi.py --adapt-results-dir ../experiments_real_world_data/results/tabpfn_uncapped
+    python score_phi.py --adapt-results-dir ../experiments_real_world_data/results/tabpfn_30k
 """
 from __future__ import annotations
 
@@ -30,7 +32,8 @@ ROOT = Path(__file__).resolve().parent
 RW_DIR = ROOT.parent / "experiments_real_world_data"
 DEFAULT_ADAPT_DIRS = (
     RW_DIR / "results" / "offline",
-    RW_DIR / "results" / "tabpfn",
+    RW_DIR / "results" / "tabpfn_uncapped",
+    RW_DIR / "results" / "tabpfn_30k",
 )
 DEFAULT_OUT = ROOT / "results" / "phi_on_adapt"
 
@@ -166,7 +169,7 @@ def print_pool_report(keep: pd.DataFrame, title: str) -> None:
 
 
 def print_thesis_report(summary: pd.DataFrame) -> None:
-    """Offline 50-cell pool plus TabPFN (capped protocol), mushroom trees/TabPFN dropped."""
+    """Four-model pool plus TabPFN (uncapped + 30k), mushroom trees/TabPFN dropped."""
     if summary.empty:
         return
     keep = _in_pool(summary)
@@ -174,11 +177,11 @@ def print_thesis_report(summary: pd.DataFrame) -> None:
     tabpfn = keep[keep["model"].eq("tabpfn")].copy()
     print_pool_report(
         offline,
-        "Kapitel 5, Offline (50 Zellen, ohne Mushroom/lgbm und Mushroom/rf)",
+        "Kapitel 5, vier Modelle ohne TabPFN (50 Kombinationen, ohne Mushroom/lgbm und Mushroom/rf)",
     )
     print_pool_report(
         tabpfn,
-        "TabPFN (ohne Mushroom; Train/Test je 1024, ein Estimator)",
+        "TabPFN (ohne Mushroom; ungekappt bzw. 30k-Teilstichprobe)",
     )
     if not tabpfn.empty:
         print_pool_report(
@@ -234,7 +237,7 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         nargs="*",
         default=None,
-        help="Search result directories (default: results/offline and results/tabpfn).",
+        help="Search result directories (default: offline, tabpfn_uncapped, tabpfn_30k).",
     )
     p.add_argument("--out-dir", type=Path, default=DEFAULT_OUT)
     p.add_argument("--size-weight", type=float, default=DEFAULT_SIZE_WEIGHT)

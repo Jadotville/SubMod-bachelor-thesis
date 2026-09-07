@@ -13,8 +13,9 @@ build/
 .vscode/
 tabpfn_api_token.txt
 **/.tabpfn_token
-experiments/synthetical_data/results/
-experiments/experiments_real_world_data/results/
+experiments/synthetical_data/results/*
+experiments/experiments_real_world_data/results/*
+!experiments/experiments_real_world_data/results/.gitkeep
 experiments/experiments_real_world_data/data/*
 !experiments/experiments_real_world_data/data/.gitkeep
 experiments/characterization of the quality function/data/
@@ -23,4 +24,6 @@ experiments/characterization of the quality function/**/*.csv
 experiments/characterization of the quality function/thesis_numbers.json
 experiments/characterization of the quality function/redundancy/
 experiments/comparison_subroc/results/
-experiments/performance improvement/results/
+experiments/performance improvement/results/*
+
+thesis/tabellen/aktuelle_tabellen/*

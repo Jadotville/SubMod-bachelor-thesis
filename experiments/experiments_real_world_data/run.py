@@ -63,7 +63,7 @@ from models import (
     resolve_model_hooks,
     tabpfn_settings,
 )
-from plot_results import plot_quality_vs_size, save_top_table
+from plot_results import format_plot_title, plot_quality_vs_size, save_top_table
 
 # Characterization defaults, see notes/6_gewichtung_alpha_beta.md and
 # writing/chapters/03_methode.tex.
@@ -186,7 +186,12 @@ def setup_logging(log_file: Path) -> logging.Logger:
     return logger
 
 
-def _make_algorithm(algorithm: str, max_workers: int, logger: logging.Logger):
+def _make_algorithm(
+    algorithm: str,
+    max_workers: int,
+    logger: logging.Logger,
+    tabpfn_n_estimators: int = 1,
+):
     """
     Resolve the search algorithm, defaulting to process parallelism.
 
@@ -195,11 +200,21 @@ def _make_algorithm(algorithm: str, max_workers: int, logger: logging.Logger):
     1.30x for LightGBM but 0.70x for logistic regression and 0.64x for the MLP,
     i.e. it makes two of three models slower than no parallelism at all. Forked
     processes reach 8.0x to 9.7x for the same three models at 16 workers.
+
+    ``spawn`` is the CUDA-safe TabPFN path: fork after a parent GPU fit cannot
+    re-init CUDA in the children.
     """
     if algorithm == "dfs":
         return ps.DFS()
     if algorithm == "threads":
         return ParallelModelAdaptabilityDFS(max_workers=max_workers)
+    if algorithm == "spawn":
+        from tabpfn_spawn import TabPFNSpawnProcessDFS
+
+        return TabPFNSpawnProcessDFS(
+            max_workers=max_workers,
+            n_estimators=tabpfn_n_estimators,
+        )
     if algorithm == "processes":
         if fork_available():
             return ProcessModelAdaptabilityDFS(max_workers=max_workers)
@@ -380,7 +395,12 @@ def run_single(
         generalization_awareness=generalization_awareness,
     )
 
-    algo = _make_algorithm(algorithm, max_workers, logger)
+    algo = _make_algorithm(
+        algorithm,
+        max_workers,
+        logger,
+        tabpfn_n_estimators=tabpfn_n_estimators or 1,
+    )
     meta["algorithm"] = type(algo).__name__
     logger.info("    fitting global %s on %d rows...", model_name, meta["n_train"])
     t_global = time.perf_counter()
@@ -393,6 +413,8 @@ def run_single(
     )
     t_sd = time.perf_counter()
     raw = algo.execute(task)
+    if hasattr(algo, "n_local_fits"):
+        meta["n_local_fits"] = int(algo.n_local_fits)
     result = ModelAdaptabilityDiscoveryResult.from_discovery_result(raw)
     runtime_sd = time.perf_counter() - t_sd
 
@@ -409,7 +431,7 @@ def run_single(
     plot_quality_vs_size(
         result_df,
         plot_path,
-        title=f"{dataset_name} — {model_name}",
+        title=format_plot_title(dataset_name, model_name),
     )
 
     if counter is not None:
@@ -486,9 +508,10 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--max-workers", type=int, default=DEFAULT_MAX_WORKERS)
     p.add_argument(
         "--algorithm",
-        choices=("processes", "threads", "dfs"),
+        choices=("processes", "threads", "dfs", "spawn"),
         default=DEFAULT_ALGORITHM,
-        help="Search parallelism; processes are 8-10x faster than threads here",
+        help="Search parallelism; processes are 8-10x faster than threads here. "
+        "spawn is the CUDA-safe TabPFN process pool.",
     )
     p.add_argument("--size-weight", type=float, default=DEFAULT_SIZE_WEIGHT)
     p.add_argument("--balance-weight", type=float, default=DEFAULT_BALANCE_WEIGHT)
@@ -606,10 +629,18 @@ def main() -> int:
                 logger.info("Skipping %s/%s (already complete)", ds, model)
                 skipped += 1
                 continue
-            # Local TabPFN shares one GPU: dfs / one worker. Processes would load
-            # the foundation model several times and typically OOM.
+            # Local TabPFN shares one GPU. The official batch uses dfs / one
+            # worker. ``spawn`` is the CUDA-safe process pool (uncapped runs);
+            # fork ``processes`` cannot re-init CUDA after the parent fit.
             is_tabpfn = model == "tabpfn"
-            algorithm = "dfs" if is_tabpfn else args.algorithm
+            if is_tabpfn and args.algorithm == "spawn":
+                algorithm = "spawn"
+            elif is_tabpfn and args.algorithm == "threads":
+                algorithm = "threads"
+            elif is_tabpfn:
+                algorithm = "dfs"
+            else:
+                algorithm = args.algorithm
             try:
                 meta = run_single(
                     ds,
@@ -618,7 +649,9 @@ def main() -> int:
                     depth=depth,
                     result_set_size=args.result_set_size,
                     min_support=args.min_support,
-                    max_workers=1 if is_tabpfn else max_workers,
+                    max_workers=(
+                        max_workers if (not is_tabpfn or algorithm in ("spawn", "threads")) else 1
+                    ),
                     sample_frac=sample_frac,
                     row_limit=row_limit,
                     train_cap=args.train_cap,

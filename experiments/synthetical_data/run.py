@@ -5,15 +5,19 @@ Jedes Experiment schreibt CSV und Figuren nach ``results/<exp_id>/``.
 Die Datensätze kommen aus ``datasets.make_<id>``. Suche und GT-Messung
 sitzen in ``lib``.
 
+Welche IDs die Bachelorarbeit auswertet und wie sie dort heißen,
+steht in ``THESIS_EXPERIMENTS.md``. Die Arbeit nummeriert neu (A, B, C1–C3, D, E).
+
 Usage::
 
     python experiments/synthetical_data/run.py --list
+    python experiments/synthetical_data/run.py --group thesis
     python experiments/synthetical_data/run.py --experiments A0 A1 B2 C5
     python experiments/synthetical_data/run.py --group C --seeds 10
     python experiments/synthetical_data/run.py --all
 
 Gruppen: A Fundament, B Nullfälle, C Mechanismen, D Kapazität,
-E Modulatoren, F Kontrollen, G Suche.
+E Modulatoren, F Kontrollen, G Suche, thesis (Kern der Arbeit).
 """
 from __future__ import annotations
 
@@ -89,6 +93,10 @@ class Ctx:
 
 
 EXPERIMENTS: dict[str, dict[str, Any]] = {}
+
+# IDs, die die Bachelorarbeit auswertet. Die übrigen bleiben im Code.
+# Zuordnung und Kurzbeschreibungen: THESIS_EXPERIMENTS.md
+THESIS_EXPERIMENTS = ("A0", "B1", "B3", "C2", "C3", "C4", "D1")
 
 
 def experiment(exp_id: str, group: str, title: str):
@@ -1185,7 +1193,7 @@ def run_experiment(exp_id: str, ctx: Ctx) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--experiments", nargs="*", help="IDs, z. B. C1 C2")
-    parser.add_argument("--group", help="ganze Gruppe (A/B/C/D/E/F/G)")
+    parser.add_argument("--group", help="ganze Gruppe (A/B/C/D/E/F/G/thesis)")
     parser.add_argument("--all", action="store_true", help="alles ausführen")
     parser.add_argument("--list", action="store_true", help="Experimente auflisten")
     parser.add_argument("--n", type=int, default=N_DEFAULT)
@@ -1195,12 +1203,17 @@ def main() -> int:
     args = parser.parse_args()
 
     if args.list:
+        core = set(THESIS_EXPERIMENTS)
         for exp_id, meta in EXPERIMENTS.items():
-            print(f"{exp_id:4s} [{meta['group']}] {meta['title']}")
+            mark = "*" if exp_id in core else " "
+            print(f"{mark} {exp_id:4s} [{meta['group']}] {meta['title']}")
+        print("  * = Kern der Bachelorarbeit (--group thesis)")
         return 0
 
     if args.all:
         ids = list(EXPERIMENTS)
+    elif args.group and args.group.lower() == "thesis":
+        ids = list(THESIS_EXPERIMENTS)
     elif args.group:
         ids = [i for i, m in EXPERIMENTS.items() if m["group"] == args.group.upper()]
     elif args.experiments:

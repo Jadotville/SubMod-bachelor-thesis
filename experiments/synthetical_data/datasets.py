@@ -4,6 +4,9 @@ Datensätze der synthetischen Experimente.
 ``run.py`` ruft nur ``make_a0`` … ``make_g1`` auf. Sweeps setzen dieselben
 Keyword-Argumente (z. B. ``make_c1(beta0=…)``, ``make_c5(n_noise=60)``).
 Hilfsfunktionen darunter implementieren die jeweiligen DGPs.
+
+Welche IDs die Bachelorarbeit auswertet und wie sie dort heißen,
+steht in ``THESIS_EXPERIMENTS.md``. Die Arbeit nummeriert neu (A, B, C1–C3, D, E).
 """
 from __future__ import annotations
 
