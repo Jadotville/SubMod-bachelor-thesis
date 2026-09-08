@@ -4,8 +4,9 @@ Worker sweep for local GPU TabPFN (package ``tabpfn``, not the API client).
 Same dataset as the offline sweep (Phishing Websites, depth 2), same train/test
 caps and ensemble size as the real-world TabPFN batch (1024/1024, one
 estimator). Sequential DFS is the baseline; threads and processes are timed at
-each worker count. Several processes each load the foundation model onto the
-same GPU — that is part of the measurement, not a bug.
+each worker count. Processes use ``TabPFNSpawnProcessDFS``, the same CUDA-safe
+pool as the real-world runs. Several processes each load the foundation model
+onto the same GPU — that is part of the measurement, not a bug.
 
     python worker_sweep_tabpfn.py
     bash run_worker_sweep_tabpfn.sh
@@ -32,8 +33,12 @@ for _p in (_HERE, _RW_DIR):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
+import pysubgroup as ps  # noqa: E402
+
 from models import TabPFNCallCounter, configure_tabpfn  # noqa: E402
-from profile_time_breakdown import ProfileConfig, _make_algorithm, build_task  # noqa: E402
+from profile_time_breakdown import ProfileConfig, build_task  # noqa: E402
+from pysubgroup import ParallelModelAdaptabilityDFS  # noqa: E402
+from tabpfn_spawn import TabPFNSpawnProcessDFS  # noqa: E402
 from worker_sweep import (  # noqa: E402
     RESULTS_DIR,
     _append_row,
@@ -80,8 +85,27 @@ def print_plan(args: argparse.Namespace, meta: dict[str, Any]) -> None:
     print(f"  Estimators    : {args.tabpfn_n_estimators}")
     print(f"  Tiefe         : {args.depth}")
     print(f"  Selektoren    : {meta['n_selectors']}")
-    print(f"  Zellen        : {meta['n_cells']}  (1× DFS + {len(args.workers)}× Threads + {len(args.workers)}× Prozesse)")
+    cells = " + ".join(f"{len(args.workers)}× {a}" for a in args.algorithms)
+    print(f"  Zellen        : {meta['n_cells']}  (1× dfs + {cells})")
     print(f"  Worker        : {args.workers}")
+
+
+def _make_algorithm(cfg: ProfileConfig):
+    """
+    TabPFN needs the ``spawn`` pool, not the fork pool of the offline models:
+    a forked child cannot re-initialise CUDA after a GPU fit in the parent, so
+    fork silently drops the local fits instead of running them.
+    """
+    if cfg.algorithm == "dfs":
+        return ps.DFS()
+    if cfg.algorithm == "threads":
+        return ParallelModelAdaptabilityDFS(max_workers=cfg.max_workers)
+    if cfg.algorithm == "processes":
+        return TabPFNSpawnProcessDFS(
+            max_workers=cfg.max_workers,
+            n_estimators=cfg.tabpfn_n_estimators or 1,
+        )
+    raise ValueError(f"Unknown algorithm {cfg.algorithm!r}")
 
 
 def time_once(cfg: ProfileConfig) -> dict[str, Any]:
@@ -89,9 +113,20 @@ def time_once(cfg: ProfileConfig) -> dict[str, Any]:
     task, meta = build_task(cfg, counter=counter)
     algorithm = _make_algorithm(cfg)
     t0 = time.perf_counter()
-    _ = task.execute(algorithm=algorithm)
+    result = task.execute(algorithm=algorithm)
     elapsed = time.perf_counter() - t0
     workers = 1 if cfg.algorithm == "dfs" else cfg.max_workers
+    # The call counter only sees the parent, so the worker-side work is read off
+    # the algorithm instead; both numbers together show that every cell of the
+    # sweep evaluates the same candidates.
+    n_local_fits = getattr(algorithm, "n_local_fits", None)
+    if n_local_fits is None and cfg.algorithm == "dfs":
+        n_local_fits = max(0, int(counter.as_dict().get("tabpfn_fits", 1)) - 1)
+    meta = {
+        **meta,
+        "n_local_fits": "" if n_local_fits is None else int(n_local_fits),
+        "n_result": int(len(result.results)),
+    }
     return {
         "dataset": cfg.dataset,
         "model": cfg.model,
